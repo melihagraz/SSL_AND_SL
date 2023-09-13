@@ -1,0 +1,108 @@
+import tensorflow as tf
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix
+
+# Load labeled and unlabeled data from CSV files
+dfL = pd.read_csv('thy_lab.csv')
+dfL['Class'] = dfL['Class'].map({3: 1, 2: 0})
+
+# Find out which class is minority
+class_0 = dfL[dfL['Class'] == 0]
+class_1 = dfL[dfL['Class'] == 1]
+count_class_0, count_class_1 = len(class_0), len(class_1)
+
+# Apply undersampling
+if count_class_0 < count_class_1:
+    class_1_under = class_1.sample(count_class_0)
+    dfL = pd.concat([class_1_under, class_0], axis=0)
+else:
+    class_0_under = class_0.sample(count_class_1)
+    dfL = pd.concat([class_0_under, class_1], axis=0)
+
+# Split the data into training and test sets
+XL = dfL.drop('Class', axis=1).values
+yL = dfL['Class'].values
+
+XL_train, XL_test, yL_train, yL_test = train_test_split(XL, yL, test_size=0.2, random_state=42)
+
+# Assuming you also have thy_Unlab.csv for unlabeled data
+unlabeled_data = pd.read_csv("thy_Unlab.csv").values
+
+# Hyperparameters
+BATCH_SIZE = 32
+EPOCHS = 1000
+tau = 0.95
+lambda_u = 1.0
+
+# Define a model for tabular data
+input_shape = XL.shape[1]
+model = tf.keras.Sequential([
+    tf.keras.layers.Input(shape=(input_shape,)),
+    tf.keras.layers.Dense(128, activation='relu'),
+    tf.keras.layers.Dense(64, activation='relu'),
+    tf.keras.layers.Dense(2, activation='softmax')
+])
+
+# Weak and strong augmentations
+def weak_augmentation(data):
+    noise = np.random.normal(0, 0.01, data.shape)
+    return data + noise
+
+def strong_augmentation(data):
+    noise = np.random.normal(0, 0.1, data.shape)
+    return data + noise
+
+# Loss function
+loss_fn = tf.keras.losses.SparseCategoricalCrossentropy()
+
+# Optimizer
+optimizer = tf.keras.optimizers.Adam()
+
+# Prepare data batches
+labeled_train_batches = tf.data.Dataset.from_tensor_slices((XL_train, yL_train)).batch(BATCH_SIZE)
+unlabeled_batches = tf.data.Dataset.from_tensor_slices(unlabeled_data).batch(BATCH_SIZE)
+
+# Function to compute performance metrics
+def compute_metrics(y_true, y_pred):
+    tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+    ppv = tp / (tp + fp)
+    npv = tn / (tn + fn)
+    sensitivity = tp / (tp + fn)
+    specificity = tn / (tn + fp)
+    accuracy = (tp + tn) / (tp + tn + fp + fn)
+    f1 = 2 * (ppv * sensitivity) / (ppv + sensitivity)
+    return {"PPV": ppv, "NPV": npv, "Sensitivity": sensitivity, "Specificity": specificity, "Accuracy": accuracy, "F1": f1}
+
+# Training loop
+for epoch in range(EPOCHS):
+    for (labeled_batch_data, labels), unlabeled_batch_data in zip(labeled_train_batches, unlabeled_batches):
+        with tf.GradientTape() as tape:
+            logits_labeled = model(labeled_batch_data, training=True)
+            loss_labeled = loss_fn(labels, logits_labeled)
+            
+            weak_data = weak_augmentation(unlabeled_batch_data)
+            logits_weak = model(weak_data, training=True)
+            pseudo_labels = tf.argmax(logits_weak, axis=1)
+            
+            mask = tf.reduce_max(tf.nn.softmax(logits_weak, axis=1), axis=1) >= tau
+            
+            strong_data = strong_augmentation(unlabeled_batch_data)
+            logits_strong = model(strong_data, training=True)
+            
+            # Compute unlabeled loss
+            losses = tf.keras.losses.sparse_categorical_crossentropy(pseudo_labels, logits_strong, from_logits=True)
+            masked_losses = tf.boolean_mask(losses, mask)
+            loss_unlabeled = tf.reduce_mean(masked_losses)
+            
+            total_loss = loss_labeled + lambda_u * loss_unlabeled
+        
+        grads = tape.gradient(total_loss, model.trainable_variables)
+        optimizer.apply_gradients(zip(grads, model.trainable_variables))
+    
+    # Evaluate on test set
+    test_predictions = model.predict(XL_test)
+    test_predictions = np.argmax(test_predictions, axis=1)
+    metrics = compute_metrics(yL_test, test_predictions)
+    print(f"Epoch {epoch+1} Metrics: {metrics}")
