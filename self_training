@@ -1,0 +1,69 @@
+
+ # imbalanced yok
+import pandas as pd
+from sklearn.naive_bayes import GaussianNB
+from sklearn.metrics import accuracy_score, confusion_matrix
+
+# Read labeled data
+dfL = pd.read_csv('thy_lab.csv')
+column_names = dfL.columns.tolist()
+
+dfL['Class'] = dfL['Class'].map({3: 1, 2: 0})
+XL = dfL.drop('Class', axis=1)
+yL = dfL['Class']
+
+# Read unlabeled data
+dfU = pd.read_csv('thy_Unlab.csv')
+column_names = dfU.columns.tolist()
+XU = dfU
+
+# Initialize the model
+model = GaussianNB()
+
+# Perform self-training
+while True:
+    # Train the model on labeled data
+    model.fit(XL, yL)
+
+    # Predict labels for unlabeled data
+    y_pred = model.predict(XU)
+
+    # Find instances with pseudo labels > 0.9
+    confident_indices = [index for index, pseudo_label in enumerate(y_pred) if pseudo_label > 0.9]
+
+    # If no more pseudo labels can be added, exit the loop
+    if len(confident_indices) == 0:
+        break
+
+    # Add confident pseudo-labeled instances to the labeled data
+    XL = pd.concat([XL, XU.iloc[confident_indices]])
+    yL = pd.concat([yL, pd.Series(y_pred[confident_indices])])
+
+    # Remove confidently labeled instances from unlabeled data
+    XU = XU.drop(XU.index[confident_indices])
+
+# Evaluate the final model
+y_pred_final = model.predict(XL)
+accuracy = accuracy_score(yL, y_pred_final)
+confusion = confusion_matrix(yL, y_pred_final)
+
+# Calculate evaluation metrics
+true_negative = confusion[0][0]
+false_positive = confusion[0][1]
+false_negative = confusion[1][0]
+true_positive = confusion[1][1]
+
+specificity = true_negative / (true_negative + false_positive)
+sensitivity = true_positive / (true_positive + false_negative)
+ppv = true_positive / (true_positive + false_positive)
+npv = true_negative / (true_negative + false_negative)
+f1 = (2 * true_positive) / (2 * true_positive + false_positive + false_negative)
+
+# Print evaluation metrics
+print("Final Model Evaluation:")
+print(f"Accuracy: {round(accuracy, 4)}")
+print(f"Sensitivity: {round(sensitivity, 4)}")
+print(f"Specificity: {round(specificity, 4)}")
+print(f"PPV: {round(ppv, 4)}")
+print(f"NPV: {round(npv, 4)}")
+print(f"F1 Score: {round(f1, 4)}")
