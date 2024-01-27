@@ -1,6 +1,8 @@
  
 
 # Machine Learning Seemi-supervised Learning Classification Project
+![Description of Image](wflowFix.PNG)
+
 [wflowFix.PNG](https://github.com/melihagraz/SSL_AND_SL/blob/7b0add83f327728995ff61f652a6297af1b81bb2/wflowFix.PNG)
 ## Overview
 This project implements machine learning models (FixMatch and self-training) for classification using TensorFlow and pandas in Python. The focus is on handling imbalanced datasets with labeled and unlabeled data, using techniques like undersampling and custom data augmentation.
