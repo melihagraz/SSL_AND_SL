@@ -1,0 +1,114 @@
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.naive_bayes import GaussianNB
+from sklearn.metrics import accuracy_score
+
+# Load labeled data
+dfL = pd.read_csv('thy_lab.csv')
+dfL['Class'] = dfL['Class'].map({3: 1, 2: 0})
+
+# Split labeled data into features and labels
+X_lab = dfL.drop('Class', axis=1)
+y_lab = dfL['Class']
+
+# Load unlabeled data
+thy_unlab_data = pd.read_csv("thy_Unlab.csv").values
+X_unlab = pd.DataFrame(thy_unlab_data)
+
+# Split labeled data into training and test sets
+X_train, X_test, y_train, y_test = train_test_split(X_lab, y_lab, test_size=0.2, random_state=42)
+
+# Split features for dual model approach
+num_features = X_train.shape[1]
+X1_train = X_train.iloc[:, :num_features//2]
+X2_train = X_train.iloc[:, num_features//2:]
+
+# Convert column names to strings
+X1_train.columns = X1_train.columns.astype(str)
+X2_train.columns = X2_train.columns.astype(str)
+
+# Iterate over 30 iterations
+for iteration in range(30):
+    # Train the first model
+    model1 = GaussianNB()
+    model1.fit(X1_train, y_train)
+
+    # Train the second model
+    model2 = GaussianNB()
+    model2.fit(X2_train, y_train)
+
+    # Split unlabeled data for dual model approach
+    X1_unlab = X_unlab.iloc[:, :num_features//2]
+    X2_unlab = X_unlab.iloc[:, num_features//2:]
+
+    # Predict with both models
+    y_pred1 = model1.predict(X1_unlab)
+    y_pred2 = model2.predict(X2_unlab)
+
+    # Update labels with shared predictions
+    shared_predictions = y_pred1 == y_pred2
+    X1_shared = X1_unlab[shared_predictions]
+    X2_shared = X2_unlab[shared_predictions]
+    y_shared = y_pred1[shared_predictions]
+
+    # Ensure consistent column names
+    X1_shared.columns = X1_train.columns
+    X2_shared.columns = X2_train.columns
+
+    # Update training data with new pseudo labels
+    X1_train = pd.concat([X1_train, X1_shared])
+    X2_train = pd.concat([X2_train, X2_shared])
+    y_train = pd.concat([y_train, pd.Series(y_shared)])
+
+    # Retrain models
+    model1.fit(X1_train, y_train)
+    model2.fit(X2_train, y_train)
+
+    # Evaluate on test data
+    X1_test = X_test.iloc[:, :num_features//2]
+    X2_test = X_test.iloc[:, num_features//2:]
+    y_pred_test1 = model1.predict(X1_test)
+    y_pred_test2 = model2.predict(X2_test)
+
+    # Compute and print accuracy for each iteration
+    accuracy1 = accuracy_score(y_test, y_pred_test1)
+    accuracy2 = accuracy_score(y_test, y_pred_test2)
+    print(f"Iteration {iteration+1}: Model 1 Accuracy = {accuracy1}, Model 2 Accuracy = {accuracy2}")
+
+from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
+
+def calculate_metrics(y_true, y_pred):
+    # Confusion matrix components
+    TN, FP, FN, TP = confusion_matrix(y_true, y_pred).ravel()
+    
+    # Sensitivity, recall, hit rate, or true positive rate
+    Sensitivity = TP / (TP + FN)
+    
+    # Specificity or true negative rate
+    Specificity = TN / (TN + FP)
+    
+    # Precision or positive predictive value
+    PPV = precision_score(y_true, y_pred)
+    
+    # Negative predictive value
+    NPV = TN / (TN + FN)
+    
+    # F1 score
+    F1 = f1_score(y_true, y_pred)
+    
+    # Accuracy
+    Acc = accuracy_score(y_true, y_pred)
+
+    return Sensitivity, Specificity, PPV, NPV, F1, Acc
+
+# Calculate metrics for Model 1
+metrics_model1 = calculate_metrics(y_test, y_pred_test1)
+
+# Calculate metrics for Model 2
+metrics_model2 = calculate_metrics(y_test, y_pred_test2)
+
+# Print metrics
+print(f"Model 1 Metrics: Sensitivity: {metrics_model1[0]}, Specificity: {metrics_model1[1]}, PPV: {metrics_model1[2]}, NPV: {metrics_model1[3]}, F1: {metrics_model1[4]}, Accuracy: {metrics_model1[5]}")
+print(f"Model 2 Metrics: Sensitivity: {metrics_model2[0]}, Specificity: {metrics_model2[1]}, PPV: {metrics_model2[2]}, NPV: {metrics_model2[3]}, F1: {metrics_model2[4]}, Accuracy: {metrics_model2[5]}")
+
