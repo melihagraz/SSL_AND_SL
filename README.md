@@ -27,6 +27,7 @@ This project implements machine learning models (FixMatch and self-training) for
 
 ## Contribution
 Feel free to fork this project and contribute. Any enhancements or bug fixes are highly appreciated!
+melih_agraz@brown.edu
 
 ---
 
