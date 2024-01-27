@@ -5,7 +5,7 @@
 
  
 ## Overview
-This project implements machine learning models (FixMatch and self-training) for classification using TensorFlow and pandas in Python. The focus is on handling imbalanced datasets with labeled and unlabeled data, using techniques like undersampling and custom data augmentation.
+This project implements machine learning models (FixMatch (mainFixMatch) and self-training (self_training)) for classification using TensorFlow and pandas in Python. The focus is on handling imbalanced datasets with labeled and unlabeled data, using techniques like undersampling and custom data augmentation.
 
 ## Features
 - **Data Processing**: Utilizes pandas for data manipulation and sklearn for splitting the dataset.
