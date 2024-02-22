@@ -27,7 +27,7 @@ yL = dfL['Class'].values
 
 XL_train, XL_test, yL_train, yL_test = train_test_split(XL, yL, test_size=0.2, random_state=42)
 
-# Assuming you also have thy_Unlab.csv for unlabeled data
+# thy_Unlab.csv for unlabeled data
 unlabeled_data = pd.read_csv("thy_Unlab.csv").values
 
 # Hyperparameters
